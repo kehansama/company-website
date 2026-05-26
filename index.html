@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<!-- QA Fixes 2026-05-26: #1 Org-chart collapse/expand #2 fetch error handling + loading state #3 Search a11y labels -->
+<html lang="zh-CN" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>一人公司 | One-Person Company</title>
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary:    { DEFAULT:'#1A1A2E', light:'#2D2D4A' },
+            surface:    { DEFAULT:'#E8E4DF' },
+            accent:     { DEFAULT:'#E94560', hover:'#D63851', active:'#C42E45', light:'#FF6B81' },
+            bgalt:      { DEFAULT:'#F5F3F0', dark:'#121222' },
+            darkbg:     { DEFAULT:'#0F0F1A', surface:'#16213E' },
+            muted:      { light:'#6B6B80', dark:'#9A9AB0' },
+            border:     { DEFAULT:'#D4D0CA', hover:'#B8B3AB', dark:'#2A2A40' }
+          },
+          fontFamily: {
+            heading: ['Inter','Noto Sans SC','sans-serif'],
+            body:    ['Inter','Noto Sans SC','system-ui','sans-serif'],
+          },
+          keyframes: {
+            fadeUp:   { '0%':  { opacity:0, transform:'translateY(16px)' }, '100%': { opacity:1, transform:'translateY(0)' } },
+            pulse:    { '0%,100%':{ opacity:1, transform:'translateY(0)' }, '50%':{ opacity:.5, transform:'translateY(8px)' } },
+          },
+          animation: {
+            fadeUp: 'fadeUp .6s cubic-bezier(.4,0,.2,1) both',
+            pulse:  'pulse 2s infinite',
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter','Noto Sans SC',system-ui,sans-serif; }
+    .section-enter { animation: fadeUp .6s cubic-bezier(.4,0,.2,1) both; }
+    .section-enter:nth-child(2){ animation-delay:.1s }
+    .section-enter:nth-child(3){ animation-delay:.2s }
+    .section-enter:nth-child(4){ animation-delay:.3s }
+    /* org-chart connector */
+    .org-line { width:2px; background:currentColor; opacity:.15; }
+    .dark .org-line { opacity:.25; }
+    /* accordion */
+    .accordion-body { max-height:0; overflow:hidden; transition:max-height .4s cubic-bezier(.4,0,.2,1),padding .3s ease; }
+    .accordion-body.open { max-height:800px; padding-top:1rem; padding-bottom:1rem; }
+    .chevron-icon { transition: transform .3s ease; }
+    .chevron-icon.rotated { transform: rotate(180deg); }
+    /* card hover */
+    .member-card { transition: box-shadow .3s ease, transform .3s ease, border-color .3s ease; }
+    .member-card:hover { transform: translateY(-4px); box-shadow: 0 8px 30px rgba(26,26,46,.16); }
+    .dark .member-card:hover { box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+    /* hamburger */
+    .bar { display:block; width:22px; height:2px; border-radius:2px; transition: all .3s ease; }
+    .nav-open .bar:nth-child(1){ transform: translateY(8px) rotate(45deg); }
+    .nav-open .bar:nth-child(2){ opacity:0; }
+    .nav-open .bar:nth-child(3){ transform: translateY(-8px) rotate(-45deg); }
+    .mobile-menu { transform: translateX(100%); transition: transform .35s cubic-bezier(.4,0,.2,1); }
+    .mobile-menu.open { transform: translateX(0); }
+    /* scrollbar */
+    ::-webkit-scrollbar { width:6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #D4D0CA; border-radius:3px; }
+    .dark ::-webkit-scrollbar-thumb { background: #2A2A40; }
+    /* org tree horizontal scroll on mobile */
+    .org-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    /* highlight match */
+    mark { background: rgba(233,69,96,.18); color: inherit; border-radius:2px; padding:0 2px; }
+    .dark mark { background: rgba(255,107,129,.2); }
+  </style>
+</head>
+<body class="bg-white text-primary dark:bg-darkbg dark:text-gray-100 transition-colors duration-300">
+
+<!-- ═══ Navigation ═══ -->
+<nav class="fixed top-0 inset-x-0 z-50 bg-white/80 dark:bg-darkbg/80 backdrop-blur-md border-b border-border dark:border-border-dark">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <!-- Logo -->
+    <a href="#hero" class="flex items-center gap-2 text-lg font-bold tracking-tight">
+      <span class="text-2xl">🏢</span>
+      <span class="hidden sm:inline">一人公司</span>
+    </a>
+    <!-- Desktop links -->
+    <div class="hidden md:flex items-center gap-6 text-sm font-medium text-muted-light dark:text-muted-dark">
+      <a href="#hero" class="hover:text-accent transition-colors">首页</a>
+      <a href="#org" class="hover:text-accent transition-colors">组织架构</a>
+      <a href="#members" class="hover:text-accent transition-colors">团队</a>
+      <a href="#tech" class="hover:text-accent transition-colors">技术栈</a>
+    </div>
+    <!-- Right: dark toggle + hamburger -->
+    <div class="flex items-center gap-3">
+      <button id="themeToggle" aria-label="切换深色模式" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-bgalt dark:hover:bg-darkbg-surface transition-colors">
+        <span id="themeIcon">🌙</span>
+      </button>
+      <button id="mobileToggle" class="md:hidden flex flex-col gap-1.5 p-1" aria-label="打开菜单">
+        <span class="bar bg-primary dark:bg-gray-100"></span>
+        <span class="bar bg-primary dark:bg-gray-100"></span>
+        <span class="bar bg-primary dark:bg-gray-100"></span>
+      </button>
+    </div>
+  </div>
+  <!-- Mobile menu panel -->
+  <div id="mobileMenu" class="mobile-menu fixed inset-y-0 right-0 w-64 bg-white dark:bg-darkbg shadow-xl z-50 p-6 pt-20 md:hidden">
+    <div class="flex flex-col gap-4 text-base font-medium">
+      <a href="#hero" class="py-2 hover:text-accent transition-colors">首页</a>
+      <a href="#org" class="py-2 hover:text-accent transition-colors">组织架构</a>
+      <a href="#members" class="py-2 hover:text-accent transition-colors">团队</a>
+      <a href="#tech" class="py-2 hover:text-accent transition-colors">技术栈</a>
+    </div>
+  </div>
+</nav>
+<div id="mobileOverlay" class="fixed inset-0 bg-black/30 z-40 hidden md:hidden" aria-hidden="true"></div>
+
+<!-- ═══ Loading / Error overlay ═══ -->
+<div id="appStatus" class="fixed inset-0 z-[60] flex items-center justify-center bg-white dark:bg-darkbg">
+  <div class="text-center">
+    <div id="spinner" class="mx-auto w-10 h-10 border-4 border-border dark:border-border-dark border-t-accent rounded-full animate-spin"></div>
+    <p id="statusText" class="mt-4 text-muted-light dark:text-muted-dark text-sm">正在加载…</p>
+    <pre id="errorDetail" class="mt-4 hidden text-xs text-left bg-bgalt dark:bg-darkbg-surface p-4 rounded-lg max-w-lg mx-auto overflow-auto text-red-500 dark:text-red-400 whitespace-pre-wrap"></pre>
+    <button id="retryBtn" class="hidden mt-4 px-4 py-2 rounded-lg bg-accent text-white text-sm hover:bg-accent-hover transition-colors">重新加载</button>
+  </div>
+</div>
+
+<!-- ═══ Hero ═══ -->
+<section id="hero" class="relative min-h-[85vh] min-h-[520px] flex flex-col items-center justify-center text-center px-4 bg-gradient-to-br from-primary to-darkbg-surface text-white overflow-hidden">
+  <!-- Decorative dots -->
+  <div class="absolute inset-0 opacity-[.04]" style="background-image:radial-gradient(circle,white 1px,transparent 1px);background-size:32px 32px"></div>
+  <div class="relative z-10 section-enter">
+    <p class="text-sm tracking-[.25em] uppercase text-accent-light mb-4">Est. 2026</p>
+    <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-tight tracking-tight">一人公司</h1>
+    <p class="mt-4 text-lg sm:text-xl lg:text-2xl font-light opacity-85 max-w-xl mx-auto">用设计改变世界，用代码构建未来</p>
+    <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
+      <a href="#members" class="inline-flex items-center justify-center px-8 py-3 rounded-lg font-semibold bg-accent hover:bg-accent-hover active:bg-accent-active transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">查看团队</a>
+      <a href="#tech" class="inline-flex items-center justify-center px-8 py-3 rounded-lg font-semibold border-2 border-white/40 hover:border-accent hover:text-accent-light transition-colors">技术栈</a>
+    </div>
+  </div>
+  <!-- Scroll indicator -->
+  <a href="#org" class="absolute bottom-8 animate-pulse text-white/60" aria-label="向下滚动">
+    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+  </a>
+</section>
+
+<!-- ═══ Organization Chart ═══ -->
+<section id="org" class="py-16 sm:py-20 px-4 bg-bgalt dark:bg-bgalt-dark section-enter">
+  <div class="max-w-6xl mx-auto">
+    <div class="flex items-center gap-3 mb-10">
+      <div class="w-1 h-8 bg-accent rounded-full"></div>
+      <h2 class="text-2xl sm:text-3xl font-bold">组织架构</h2>
+      <span class="ml-2 text-xs text-muted-light dark:text-muted-dark">点击节点可折叠/展开</span>
+    </div>
+    <div id="orgChart" class="org-scroll pb-4"></div>
+  </div>
+</section>
+
+<!-- ═══ Member Cards ═══ -->
+<section id="members" class="py-16 sm:py-20 px-4 section-enter">
+  <div class="max-w-6xl mx-auto">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-1 h-8 bg-accent rounded-full"></div>
+      <h2 class="text-2xl sm:text-3xl font-bold">团队成员</h2>
+    </div>
+    <!-- Search & filter bar -->
+    <div role="search" class="flex flex-col sm:flex-row gap-3 mb-8">
+      <div class="relative flex-1">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-light dark:text-muted-dark" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"/></svg>
+        <input id="searchInput" type="text" placeholder="搜索成员、角色、技能…" aria-label="搜索成员" class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border dark:border-border-dark bg-white dark:bg-darkbg-surface focus:outline-none focus:ring-2 focus:ring-accent/40 transition placeholder-muted-light dark:placeholder-muted-dark text-sm" />
+      </div>
+      <select id="deptFilter" class="px-4 py-2.5 rounded-lg border border-border dark:border-border-dark bg-white dark:bg-darkbg-surface focus:outline-none focus:ring-2 focus:ring-accent/40 text-sm">
+        <option value="">全部部门</option>
+      </select>
+      <span id="resultCount" class="flex items-center text-sm text-muted-light dark:text-muted-dark whitespace-nowrap"></span>
+    </div>
+    <!-- Grid -->
+    <div id="memberGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+    <p id="noResult" class="hidden text-center py-12 text-muted-light dark:text-muted-dark">没有找到匹配的成员</p>
+  </div>
+</section>
+
+<!-- ═══ Tech Stack ═══ -->
+<section id="tech" class="py-16 sm:py-20 px-4 bg-bgalt dark:bg-bgalt-dark section-enter">
+  <div class="max-w-6xl mx-auto">
+    <div class="flex items-center gap-3 mb-10">
+      <div class="w-1 h-8 bg-accent rounded-full"></div>
+      <h2 class="text-2xl sm:text-3xl font-bold">技术栈</h2>
+    </div>
+    <div id="techStack" class="flex flex-wrap gap-3"></div>
+  </div>
+</section>
+
+<!-- ═══ Footer ═══ -->
+<footer class="bg-primary dark:bg-darkbg text-white/80 py-16 px-4">
+  <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-10">
+    <div>
+      <div class="flex items-center gap-2 text-lg font-bold text-white mb-3">
+        <span class="text-2xl">🏢</span> 一人公司
+      </div>
+      <p class="text-sm opacity-60 max-w-xs leading-relaxed">用设计改变世界，用代码构建未来。敏捷、专注、一人成军。</p>
+    </div>
+    <div>
+      <h4 class="text-sm font-semibold uppercase tracking-wider text-white mb-4">快速导航</h4>
+      <ul class="space-y-2 text-sm">
+        <li><a href="#hero" class="hover:text-accent-light transition-colors">首页</a></li>
+        <li><a href="#org" class="hover:text-accent-light transition-colors">组织架构</a></li>
+        <li><a href="#members" class="hover:text-accent-light transition-colors">团队</a></li>
+        <li><a href="#tech" class="hover:text-accent-light transition-colors">技术栈</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4 class="text-sm font-semibold uppercase tracking-wider text-white mb-4">联系</h4>
+      <ul class="space-y-2 text-sm opacity-60">
+        <li>📧 hello@one-person.company</li>
+        <li>🌐 one-person.company</li>
+      </ul>
+    </div>
+  </div>
+  <div class="max-w-6xl mx-auto mt-12 pt-6 border-t border-white/10 text-center text-xs opacity-40">
+    © 2026 一人公司 · 隐私政策 · 使用条款
+  </div>
+</footer>
+
+<script>
+/* ═══════════════════════════════════════
+   DATA
+   ═══════════════════════════════════════ */
+const DATA_URL = './src/data/members.json';
+let members = [];
+let company = {};
+
+// ── Loading / Error UI ──
+const appStatus   = document.getElementById('appStatus');
+const spinner     = document.getElementById('spinner');
+const statusText  = document.getElementById('statusText');
+const errorDetail = document.getElementById('errorDetail');
+const retryBtn    = document.getElementById('retryBtn');
+
+function showLoading() {
+  spinner.classList.remove('hidden');
+  statusText.textContent = '正在加载…';
+  errorDetail.classList.add('hidden');
+  retryBtn.classList.add('hidden');
+  appStatus.style.pointerEvents = 'auto';
+  appStatus.style.opacity = '1';
+}
+function hideLoading() {
+  appStatus.style.pointerEvents = 'none';
+  appStatus.style.opacity = '0';
+}
+function showError(msg, detail) {
+  spinner.classList.add('hidden');
+  statusText.textContent = msg;
+  if (detail) {
+    errorDetail.textContent = detail;
+    errorDetail.classList.remove('hidden');
+  }
+  retryBtn.classList.remove('hidden');
+}
+
+async function loadData() {
+  try {
+    const res = await fetch(DATA_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    const text = await res.text();
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch (e) {
+      throw new Error(`JSON 解析失败: ${e.message}\n前200字符: ${text.slice(0, 200)}`);
+    }
+    if (!json.members || !Array.isArray(json.members)) throw new Error('数据格式错误: 缺少 members 数组');
+    if (!json.company) throw new Error('数据格式错误: 缺少 company 字段');
+    company = json.company;
+    members = json.members;
+  } catch (err) {
+    showError('数据加载失败', err.stack || err.message);
+    throw err;
+  }
+}
+retryBtn.addEventListener('click', () => { showLoading(); loadData().then(onReady).catch(() => {}); });
+
+/* ═══════════════════════════════════════
+   THEME
+   ═══════════════════════════════════════ */
+const themeToggle = document.getElementById('themeToggle');
+const themeIcon   = document.getElementById('themeIcon');
+
+function applyTheme(dark) {
+  document.documentElement.classList.toggle('dark', dark);
+  themeIcon.textContent = dark ? '☀️' : '🌙';
+  localStorage.setItem('theme', dark ? 'dark' : 'light');
+}
+function initTheme() {
+  const saved = localStorage.getItem('theme');
+  const dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme:dark)').matches;
+  applyTheme(dark);
+}
+initTheme();
+themeToggle.addEventListener('click', () => applyTheme(!document.documentElement.classList.contains('dark')));
+
+/* ═══════════════════════════════════════
+   MOBILE NAV
+   ═══════════════════════════════════════ */
+const mobileToggle = document.getElementById('mobileToggle');
+const mobileMenu   = document.getElementById('mobileMenu');
+const mobileOverlay= document.getElementById('mobileOverlay');
+function closeMobile() {
+  mobileToggle.classList.remove('nav-open');
+  mobileMenu.classList.remove('open');
+  mobileOverlay.classList.add('hidden');
+}
+mobileToggle.addEventListener('click', () => {
+  const isOpen = mobileMenu.classList.toggle('open');
+  mobileToggle.classList.toggle('nav-open');
+  mobileOverlay.classList.toggle('hidden', !isOpen);
+});
+mobileOverlay.addEventListener('click', closeMobile);
+mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMobile));
+
+/* ═══════════════════════════════════════
+   ORG CHART
+   ═══════════════════════════════════════ */
+function buildOrgChart() {
+  const root = members.find(m => m.reportsTo === null);
+  const childrenMap = {};
+  members.forEach(m => {
+    if (m.reportsTo) {
+      if (!childrenMap[m.reportsTo]) childrenMap[m.reportsTo] = [];
+      childrenMap[m.reportsTo].push(m);
+    }
+  });
+
+  // Track collapsed state per node id (default: all expanded)
+  const collapsed = new Set();
+
+  function nodeHTML(m, depth) {
+    const kids = childrenMap[m.id] || [];
+    const hasKids = kids.length > 0;
+    const accentColors = {
+      '管理层': 'bg-accent/10 text-accent dark:bg-accent-light/10 dark:text-accent-light',
+      '技术部': 'bg-blue-500/10 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300',
+      '产品与设计': 'bg-purple-500/10 text-purple-600 dark:bg-purple-400/10 dark:text-purple-300',
+      '运营与市场': 'bg-green-500/10 text-green-600 dark:bg-green-400/10 dark:text-green-300',
+    };
+    const badgeCls = accentColors[m.department] || 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    const isCollapsed = collapsed.has(m.id);
+    return `
+      <div class="flex flex-col items-center">
+        <div class="flex flex-col items-center bg-white dark:bg-darkbg-surface border border-border dark:border-border-dark rounded-xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow min-w-[140px] sm:min-w-[180px] max-w-[220px] text-center cursor-pointer org-node relative select-none" data-id="${m.id}" role="treeitem" aria-expanded="${hasKids ? !isCollapsed : undefined}" tabindex="${hasKids ? '0' : '-1'}">
+          ${hasKids ? `<svg class="chevron-icon absolute top-1.5 right-1.5 w-3.5 h-3.5 text-muted-light dark:text-muted-dark ${isCollapsed ? '' : 'rotated'}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>` : ''}
+          <span class="text-2xl mb-1">${m.emoji}</span>
+          <span class="font-semibold text-sm truncate w-full">${m.name}</span>
+          <span class="text-xs text-muted-light dark:text-muted-dark truncate w-full">${m.role}</span>
+          <span class="mt-1.5 text-[10px] px-2 py-0.5 rounded-full ${badgeCls}">${m.department}</span>
+        </div>
+        ${hasKids ? `
+          <div class="org-line h-5 sm:h-6 children-wrapper" data-parent="${m.id}" ${isCollapsed ? 'style="display:none"' : ''}>
+          </div>
+          <div class="flex flex-wrap justify-center gap-3 sm:gap-4 relative children-wrapper" data-parent="${m.id}" ${isCollapsed ? 'style="display:none"' : ''}>
+            ${kids.length > 1 ? `<div class="absolute top-0 left-[calc(50%/2+1px)] right-[calc(50%/2+1px)] h-[2px] bg-current opacity-15 dark:opacity-25"></div>` : ''}
+            ${kids.map(k => `
+              <div class="flex flex-col items-center">
+                <div class="org-line h-3 sm:h-4 w-[2px]"></div>
+                ${nodeHTML(k, depth + 1)}
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  const container = document.getElementById('orgChart');
+  container.innerHTML = `<div class="flex justify-center">${nodeHTML(root, 0)}</div>`;
+
+  // Attach click / keyboard handlers for collapse/expand
+  container.querySelectorAll('.org-node').forEach(node => {
+    if (!node.getAttribute('aria-expanded')) return;
+    const toggle = () => {
+      const id = node.dataset.id;
+      const isExpanded = node.getAttribute('aria-expanded') === 'true';
+      if (isExpanded) {
+        collapsed.add(id);
+        node.setAttribute('aria-expanded', 'false');
+        node.querySelector('.chevron-icon')?.classList.remove('rotated');
+      } else {
+        collapsed.delete(id);
+        node.setAttribute('aria-expanded', 'true');
+        node.querySelector('.chevron-icon')?.classList.add('rotated');
+      }
+      container.querySelectorAll(`.children-wrapper[data-parent="${id}"]`).forEach(w => {
+        w.style.display = isExpanded ? 'none' : '';
+      });
+    };
+    node.addEventListener('click', toggle);
+    node.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggle();
+      }
+    });
+  });
+}
+
+/* ═══════════════════════════════════════
+   MEMBER CARDS
+   ═══════════════════════════════════════ */
+function populateDeptFilter() {
+  const depts = [...new Set(members.map(m => m.department))].sort();
+  const sel = document.getElementById('deptFilter');
+  depts.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d; opt.textContent = d;
+    sel.appendChild(opt);
+  });
+}
+
+function highlightText(text, query) {
+  if (!query) return text;
+  const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi');
+  return text.replace(re, '<mark>$1</mark>');
+}
+
+function renderCards(query = '', dept = '') {
+  const grid = document.getElementById('memberGrid');
+  const noResult = document.getElementById('noResult');
+  const resultCount = document.getElementById('resultCount');
+
+  let filtered = members.filter(m => {
+    const matchDept = !dept || m.department === dept;
+    const q = query.toLowerCase();
+    const matchQuery = !query ||
+      m.name.toLowerCase().includes(q) ||
+      m.role.toLowerCase().includes(q) ||
+      m.department.toLowerCase().includes(q) ||
+      m.skills.some(s => s.toLowerCase().includes(q)) ||
+      (m.bio && m.bio.toLowerCase().includes(q));
+    return matchDept && matchQuery;
+  });
+
+  resultCount.textContent = `共 ${filtered.length} / ${members.length}`;
+  noResult.classList.toggle('hidden', filtered.length > 0);
+
+  grid.innerHTML = filtered.map((m, i) => `
+    <div class="member-card bg-white dark:bg-darkbg-surface border border-border dark:border-border-dark rounded-xl p-6 flex flex-col items-center text-center opacity-0" style="animation: fadeUp .5s ${i * .06}s cubic-bezier(.4,0,.2,1) both">
+      <div class="w-20 h-20 rounded-full bg-bgalt dark:bg-darkbg flex items-center justify-center text-3xl mb-4 ring-2 ring-accent/30">${m.emoji}</div>
+      <h3 class="text-lg font-bold">${highlightText(m.name, query)}</h3>
+      <p class="text-sm text-muted-light dark:text-muted-dark mt-0.5">${highlightText(m.role, query)}</p>
+      <span class="mt-1 text-xs px-2.5 py-0.5 rounded-full bg-accent/8 text-accent dark:bg-accent-light/10 dark:text-accent-light">${m.department}</span>
+      <p class="mt-3 text-sm text-muted-light dark:text-muted-dark italic leading-relaxed">"${m.bio}"</p>
+      <div class="mt-4 flex flex-wrap gap-1.5 justify-center">
+        ${m.skills.map(s => `<span class="text-[11px] px-2 py-0.5 rounded bg-bgalt dark:bg-darkbg text-muted-light dark:text-muted-dark">${highlightText(s, query)}</span>`).join('')}
+      </div>
+      <div class="mt-4 pt-4 border-t border-border dark:border-border-dark w-full flex items-center justify-center gap-4 text-sm">
+        <span class="text-muted-light dark:text-muted-dark">📂 ${m.projects.length} 个项目</span>
+        <span class="text-muted-light dark:text-muted-dark">🛠 ${m.skills.length} 项技能</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ═══════════════════════════════════════
+   TECH STACK
+   ═══════════════════════════════════════ */
+function renderTechStack() {
+  const colors = [
+    'bg-blue-500/10 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300',
+    'bg-purple-500/10 text-purple-600 dark:bg-purple-400/10 dark:text-purple-300',
+    'bg-green-500/10 text-green-600 dark:bg-green-400/10 dark:text-green-300',
+    'bg-orange-500/10 text-orange-600 dark:bg-orange-400/10 dark:text-orange-300',
+    'bg-pink-500/10 text-pink-600 dark:bg-pink-400/10 dark:text-pink-300',
+    'bg-teal-500/10 text-teal-600 dark:bg-teal-400/10 dark:text-teal-300',
+  ];
+  document.getElementById('techStack').innerHTML = company.techStack.map((t, i) =>
+    `<span class="px-4 py-2 rounded-lg text-sm font-medium ${colors[i % colors.length]}">${t}</span>`
+  ).join('');
+}
+
+/* ═══════════════════════════════════════
+   SEARCH / FILTER
+   ═══════════════════════════════════════ */
+let debounce;
+function onSearch() {
+  clearTimeout(debounce);
+  debounce = setTimeout(() => {
+    renderCards(document.getElementById('searchInput').value.trim(), document.getElementById('deptFilter').value);
+  }, 200);
+}
+document.getElementById('searchInput').addEventListener('input', onSearch);
+document.getElementById('deptFilter').addEventListener('change', () => renderCards(document.getElementById('searchInput').value.trim(), document.getElementById('deptFilter').value));
+
+/* ═══════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════ */
+function onReady() {
+  buildOrgChart();
+  populateDeptFilter();
+  renderCards();
+  renderTechStack();
+  hideLoading();
+}
+
+showLoading();
+loadData().then(onReady).catch(() => {});
+</script>
+</body>
+</html>
