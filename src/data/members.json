@@ -1,0 +1,225 @@
+{
+  "company": {
+    "name": "一人公司",
+    "nameEn": "One-Person Company",
+    "mission": "用设计改变世界，用代码构建未来",
+    "missionEn": "Design to change the world, code to build the future",
+    "founded": "2026",
+    "techStack": [
+      "TypeScript", "Python", "Node.js", "React", "TailwindCSS",
+      "Docker", "PostgreSQL", "Redis", "OpenClaw", "Qwen AI"
+    ],
+    "culture": "敏捷、专注、一人成军"
+  },
+  "members": [
+    {
+      "id": "boss",
+      "name": "老板",
+      "role": "创始人 & CEO",
+      "department": "管理层",
+      "reportsTo": null,
+      "projects": ["整体战略", "融资", "品牌定位"],
+      "skills": ["战略规划", "资源整合", "决策"],
+      "emoji": "👑",
+      "bio": "一人公司的缔造者，掌舵全局方向"
+    },
+    {
+      "id": "hermes",
+      "name": "Hermes",
+      "role": "总经理 (GM)",
+      "department": "管理层",
+      "reportsTo": "boss",
+      "projects": ["日常运营", "跨部门协调", "资源调度"],
+      "skills": ["调度", "协调", "流程管理"],
+      "emoji": "🔮",
+      "bio": "公司的中枢神经系统，让一切高效运转"
+    },
+    {
+      "id": "senior-pm",
+      "name": "Senior PM",
+      "role": "高级项目经理",
+      "department": "管理层",
+      "reportsTo": "hermes",
+      "projects": ["项目统筹", "里程碑管理", "风险管控"],
+      "skills": ["项目管理", "风险管理", "敏捷开发"],
+      "emoji": "📋",
+      "bio": "所有项目的总调度台，确保按时交付"
+    },
+    {
+      "id": "tech-lead",
+      "name": "Tech Lead",
+      "role": "技术负责人 (CTO)",
+      "department": "技术部",
+      "reportsTo": "hermes",
+      "projects": ["技术架构", "技术选型", "代码规范"],
+      "skills": ["架构设计", "技术评审", "团队领导"],
+      "emoji": "⚙️",
+      "bio": "技术舵手，引领技术方向与质量标准"
+    },
+    {
+      "id": "frontend-dev",
+      "name": "Frontend Dev",
+      "role": "前端开发工程师",
+      "department": "技术部",
+      "reportsTo": "tech-lead",
+      "projects": ["官网开发", "UI组件库", "响应式设计"],
+      "skills": ["HTML/CSS", "JavaScript", "React", "TailwindCSS"],
+      "emoji": "🎨",
+      "bio": "像素级还原设计稿，让每个交互丝滑流畅"
+    },
+    {
+      "id": "backend-architect",
+      "name": "Backend Architect",
+      "role": "后端架构师",
+      "department": "技术部",
+      "reportsTo": "tech-lead",
+      "projects": ["微服务架构", "数据库设计", "API网关"],
+      "skills": ["系统架构", "分布式系统", "性能优化"],
+      "emoji": "🏗️",
+      "bio": "构建坚实可靠的后端基石"
+    },
+    {
+      "id": "backend-dept",
+      "name": "Backend Dept",
+      "role": "后端开发主管",
+      "department": "技术部",
+      "reportsTo": "backend-architect",
+      "projects": ["核心业务逻辑", "后端团队管理"],
+      "skills": ["Node.js", "Python", "PostgreSQL", "Redis"],
+      "emoji": "🔧",
+      "bio": "后端开发的中坚力量，带领后端团队交付高质量代码"
+    },
+    {
+      "id": "backend-wechat-mp",
+      "name": "WeChat MP Backend",
+      "role": "微信公众号后端工程师",
+      "department": "技术部",
+      "reportsTo": "backend-dept",
+      "projects": ["公众号消息系统", "RSS订阅", "内容推送"],
+      "skills": ["微信公众号API", "消息队列", "定时任务"],
+      "emoji": "💬",
+      "bio": "专注微信公众号生态的后端开发"
+    },
+    {
+      "id": "backend-proxy-pool",
+      "name": "Proxy Pool Backend",
+      "role": "代理池后端工程师",
+      "department": "技术部",
+      "reportsTo": "backend-dept",
+      "projects": ["代理池管理", "IP轮换", "可用性检测"],
+      "skills": ["爬虫技术", "代理协议", "并发编程"],
+      "emoji": "🌐",
+      "bio": "构建和维护高可用代理池基础设施"
+    },
+    {
+      "id": "backend-cloakbrowser",
+      "name": "Cloak Browser",
+      "role": "浏览器伪装工程师",
+      "department": "技术部",
+      "reportsTo": "backend-dept",
+      "projects": ["浏览器指纹伪装", "反检测系统", "自动化采集"],
+      "skills": ["浏览器自动化", "指纹伪装", "反爬虫对抗"],
+      "emoji": "🎭",
+      "bio": "让自动化浏览器在反检测系统中隐身穿行"
+    },
+    {
+      "id": "ai-engineer",
+      "name": "AI Engineer",
+      "role": "AI 工程师",
+      "department": "技术部",
+      "reportsTo": "tech-lead",
+      "projects": ["LLM集成", "智能Agent开发", "模型微调"],
+      "skills": ["大语言模型", "Prompt Engineering", "AI Agent"],
+      "emoji": "🤖",
+      "bio": "让AI成为团队的核心战斗力"
+    },
+    {
+      "id": "prompt-engineer",
+      "name": "Prompt Engineer",
+      "role": "提示词工程师",
+      "department": "技术部",
+      "reportsTo": "ai-engineer",
+      "projects": ["Agent提示词优化", "对话流设计", "效果评估"],
+      "skills": ["Prompt设计", "对话系统", "NLP"],
+      "emoji": "✨",
+      "bio": "用精准的提示词释放AI最大潜能"
+    },
+    {
+      "id": "qa-engineer",
+      "name": "QA Engineer",
+      "role": "质量测试工程师",
+      "department": "技术部",
+      "reportsTo": "tech-lead",
+      "projects": ["自动化测试", "CI/CD", "质量门禁"],
+      "skills": ["单元测试", "E2E测试", "性能测试"],
+      "emoji": "🔍",
+      "bio": "质量的守门员，确保每个版本都可靠交付"
+    },
+    {
+      "id": "api-tester",
+      "name": "API Tester",
+      "role": "API 测试工程师",
+      "department": "技术部",
+      "reportsTo": "qa-engineer",
+      "projects": ["API接口测试", "契约测试", "性能基准"],
+      "skills": ["API测试", "接口自动化", "压测"],
+      "emoji": "🧪",
+      "bio": "API质量的最后一道防线"
+    },
+    {
+      "id": "product-manager",
+      "name": "Product Manager",
+      "role": "产品经理",
+      "department": "产品与设计",
+      "reportsTo": "hermes",
+      "projects": ["需求分析", "PRD编写", "用户研究"],
+      "skills": ["需求管理", "用户故事", "数据分析"],
+      "emoji": "📝",
+      "bio": "连接用户需求与技术实现的桥梁"
+    },
+    {
+      "id": "ui-designer",
+      "name": "UI Designer",
+      "role": "UI/UX 设计师",
+      "department": "产品与设计",
+      "reportsTo": "product-manager",
+      "projects": ["视觉设计", "交互原型", "设计系统"],
+      "skills": ["Figma", "设计规范", "用户研究"],
+      "emoji": "🎭",
+      "bio": "让每个像素都讲述用户体验的故事"
+    },
+    {
+      "id": "marketing",
+      "name": "Marketing",
+      "role": "市场营销经理",
+      "department": "运营与市场",
+      "reportsTo": "hermes",
+      "projects": ["品牌推广", "内容营销", "增长策略"],
+      "skills": ["SEO", "社交媒体", "内容策略"],
+      "emoji": "📢",
+      "bio": "让一人公司的声音传得更远"
+    },
+    {
+      "id": "operations",
+      "name": "Operations",
+      "role": "运营经理",
+      "department": "运营与市场",
+      "reportsTo": "hermes",
+      "projects": ["日常运营", "用户增长", "数据分析"],
+      "skills": ["运营策略", "数据分析", "用户运营"],
+      "emoji": "📊",
+      "bio": "数据驱动的运营专家，持续优化用户旅程"
+    },
+    {
+      "id": "finance",
+      "name": "Finance",
+      "role": "财务经理",
+      "department": "运营与市场",
+      "reportsTo": "hermes",
+      "projects": ["财务管理", "成本控制", "预算规划"],
+      "skills": ["财务分析", "预算管理", "合规"],
+      "emoji": "💰",
+      "bio": "每一分钱都花在刀刃上的财务守护者"
+    }
+  ]
+}
