@@ -1,5 +1,9 @@
+<!-- v2026-05-27: 修复3个严重UI/UX问题
+  1. 组织架构: 重写为严格的层级树形布局,同级节点水平对齐,SVG连线连接上下级
+  2. 筛选空白: 移除冗余高度约束,空结果显示提示,过渡动画平滑
+  3. 成员详情: 卡片+组织图节点均可打开详情弹窗,含汇报路径/上级/下属/项目/技能
+-->
 <!DOCTYPE html>
-<!-- v2026-05-26: Added level badges, fixed dept filter, added member detail modal -->
 <html lang="zh-CN" class="scroll-smooth">
 <head>
   <meta charset="UTF-8" />
@@ -29,12 +33,23 @@
     }
   </script>
   <style>
+    /* ── Scroll-triggered section animations ── */
     .section-enter { opacity:0; transform:translateY(20px); transition: all .6s cubic-bezier(.4,0,.2,1); }
     .section-enter.visible { opacity:1; transform:translateY(0); }
+
+    /* ── Org chart horizontal scroll ── */
     .org-scroll { overflow-x:auto; scroll-behavior:smooth; -webkit-overflow-scrolling:touch; }
-    .org-line { width:2px; background:currentColor; opacity:.15; }
-    .chevron-icon { transition: transform .2s ease; }
-    .chevron-icon.rotated { transform: rotate(-90deg); }
+
+    /* ── Org node base ── */
+    .org-node {
+      transition: box-shadow .2s ease, border-color .2s ease;
+    }
+    .org-node:hover {
+      box-shadow: 0 4px 16px rgba(233,69,96,.12);
+      border-color: rgba(233,69,96,.4);
+    }
+
+    /* ── Level badges ── */
     .level-badge { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; }
     .level-T10 { background: #FFD700; color: #000; }
     .level-T9  { background: #C0C0C0; color: #000; }
@@ -42,11 +57,30 @@
     .level-T5  { background: #7C3AED; color: #fff; }
     .level-T4  { background: #E0DCD7; color: #333; }
     .dark .level-T4 { background: #3A3A4E; color: #ccc; }
-    /* Modal */
-    #memberModal { transition: opacity .2s ease; }
-    #memberModal.hidden { opacity: 0; pointer-events: none; }
-    #memberModal:not(.hidden) { opacity: 1; pointer-events: auto; }
+
+    /* ── Modal animation: fade + scale ── */
+    #memberModal .modal-inner {
+      transition: opacity .25s ease, transform .25s cubic-bezier(.4,0,.2,1);
+    }
+    #memberModal.hidden .modal-inner {
+      opacity: 0;
+      transform: scale(.95);
+      pointer-events: none;
+    }
+    #memberModal:not(.hidden) .modal-inner {
+      opacity: 1;
+      transform: scale(1);
+    }
     .modal-backdrop { backdrop-filter: blur(4px); }
+
+    /* ── Card fade transition ── */
+    .member-card {
+      transition: opacity .3s ease, transform .3s ease;
+    }
+
+    /* ── Chevron rotate for collapsible nodes ── */
+    .chevron-icon { transition: transform .2s ease; }
+    .chevron-icon.rotated { transform: rotate(-90deg); }
   </style>
 </head>
 <body class="bg-white dark:bg-darkbg text-primary dark:text-gray-100 transition-colors duration-300">
@@ -112,18 +146,21 @@
 </section>
 
 <!-- ═══ Organization Chart ═══ -->
+<!-- 修复: 严格层级水平布局 + SVG连线 -->
 <section id="org" class="py-16 sm:py-20 px-4 bg-bgalt dark:bg-bgalt-dark">
   <div class="max-w-6xl mx-auto">
     <div class="flex items-center gap-3 mb-10">
       <div class="w-1 h-8 bg-accent rounded-full"></div>
       <h2 class="text-2xl sm:text-3xl font-bold">组织架构</h2>
-      <span class="ml-2 text-xs text-muted-light dark:text-muted-dark">点击节点可折叠/展开</span>
+      <span class="ml-2 text-xs text-muted-light dark:text-muted-dark">点击节点查看详情 · 箭头折叠/展开</span>
     </div>
-    <div id="orgChart" class="org-scroll pb-4"></div>
+    <!-- 容器使用相对定位,SVG定位层覆盖在上面 -->
+    <div id="orgChart" class="org-scroll pb-4 relative"></div>
   </div>
 </section>
 
 <!-- ═══ Member Cards ═══ -->
+<!-- 修复: 移除固定高度,筛选后自动适应内容,空结果有提示 -->
 <section id="members" class="py-16 sm:py-20 px-4">
   <div class="max-w-6xl mx-auto">
     <div class="flex items-center gap-3 mb-6">
@@ -140,8 +177,13 @@
       </select>
       <span id="resultCount" class="flex items-center text-sm text-muted-light dark:text-muted-dark whitespace-nowrap"></span>
     </div>
+    <!-- 移除 min-height,让网格根据内容自动高度 -->
     <div id="memberGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
-    <p id="noResult" class="hidden text-center py-12 text-muted-light dark:text-muted-dark">没有找到匹配的成员</p>
+    <!-- 空结果提示 -->
+    <p id="noResult" class="hidden text-center py-12 text-muted-light dark:text-muted-dark text-base">
+      <span class="block text-3xl mb-2">🔍</span>
+      没有找到匹配的成员
+    </p>
   </div>
 </section>
 
@@ -188,13 +230,14 @@
 </footer>
 
 <!-- ═══ Member Detail Modal ═══ -->
+<!-- 修复: 完整详情弹窗,支持ESC/背景/X关闭,淡入缩放动画,含汇报路径 -->
 <div id="memberModal" class="hidden fixed inset-0 z-[70] flex items-center justify-center modal-backdrop bg-black/50">
-  <div class="relative bg-white dark:bg-darkbg-surface rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true">
-    <!-- Close button -->
-    <button id="modalClose" class="absolute top-3 right-3 p-2 rounded-full hover:bg-bgalt dark:hover:bg-darkbg transition" aria-label="关闭">
+  <div class="modal-inner relative bg-white dark:bg-darkbg-surface rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true">
+    <!-- 关闭按钮 -->
+    <button id="modalClose" class="absolute top-3 right-3 z-10 p-2 rounded-full hover:bg-bgalt dark:hover:bg-darkbg transition" aria-label="关闭">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
     </button>
-    <!-- Content -->
+    <!-- 详情内容 -->
     <div id="modalContent" class="p-6 sm:p-8"></div>
   </div>
 </div>
@@ -239,7 +282,7 @@ function showError(msg, detail) {
 async function loadData() {
   try {
     const res = await fetch(DATA_URL);
-    if (!res.ok) throw new Error(`HTTP ${res.status_code} ${res.statusText}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
     const text = await res.text();
     let json;
     try { json = JSON.parse(text); } catch (e) { throw new Error(`JSON 解析失败: ${e.message}`); }
@@ -279,11 +322,11 @@ const mobileToggle = document.getElementById('mobileToggle');
 const mobileMenu   = document.getElementById('mobileMenu');
 const mobileOverlay= document.getElementById('mobileOverlay');
 function closeMobile() {
-  mobileMenu.classList.remove('translate-x-full');
+  mobileMenu.classList.add('translate-x-full');
   mobileOverlay.classList.add('hidden');
 }
 mobileToggle.addEventListener('click', () => {
-  const isOpen = mobileMenu.classList.toggle('translate-x-full');
+  const isOpen = !mobileMenu.classList.toggle('translate-x-full');
   mobileOverlay.classList.toggle('hidden', isOpen);
 });
 mobileOverlay.addEventListener('click', closeMobile);
@@ -302,10 +345,17 @@ function levelBadgeHTML(level) {
 }
 
 /* ═══════════════════════════════════════
-   ORG CHART
+   ORG CHART — 修复: 严格层级水平树形布局
+   同级节点在同一水平线上,SVG连线连接上下级
    ═══════════════════════════════════════ */
+// ── Org chart collapsed state (module-level so toggleCollapse can access) ──
+const collapsed = new Set();
+
 function buildOrgChart() {
   const root = members.find(m => m.reportsTo === null);
+  if (!root) return;
+
+  // 构建 children 映射
   const childrenMap = {};
   members.forEach(m => {
     if (m.reportsTo) {
@@ -314,71 +364,200 @@ function buildOrgChart() {
     }
   });
 
-  const collapsed = new Set();
+  const deptAccent = {
+    '管理层': 'bg-accent/10 text-accent dark:bg-accent-light/10 dark:text-accent-light',
+    '技术部': 'bg-blue-500/10 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300',
+    '产品与设计': 'bg-purple-500/10 text-purple-600 dark:bg-purple-400/10 dark:text-purple-300',
+    '运营与市场': 'bg-green-500/10 text-green-600 dark:bg-green-400/10 dark:text-green-300',
+  };
 
-  function nodeHTML(m, depth) {
+  /**
+   * 递归构建树形 DOM:
+   * <div class="org-branch">
+   *   <div class="org-node" data-id="..."> ... </div>
+   *   <div class="org-children">           ← 子节点容器,水平排列
+   *     <div class="org-branch">
+   *       <div class="org-node" data-id="..."> ... </div>
+   *       <div class="org-children"> ... </div>
+   *     </div>
+   *     ...
+   *   </div>
+   * </div>
+   */
+  function branchHTML(m) {
     const kids = childrenMap[m.id] || [];
     const hasKids = kids.length > 0;
-    const accentColors = {
-      '管理层': 'bg-accent/10 text-accent dark:bg-accent-light/10 dark:text-accent-light',
-      '技术部': 'bg-blue-500/10 text-blue-600 dark:bg-blue-400/10 dark:text-blue-300',
-      '产品与设计': 'bg-purple-500/10 text-purple-600 dark:bg-purple-400/10 dark:text-purple-300',
-      '运营与市场': 'bg-green-500/10 text-green-600 dark:bg-green-400/10 dark:text-green-300',
-    };
-    const badgeCls = accentColors[m.department] || 'bg-gray-100 text-gray-600';
     const isCollapsed = collapsed.has(m.id);
-    return `
-      <div class="flex flex-col items-center">
-        <div class="flex flex-col items-center bg-white dark:bg-darkbg-surface border border-border dark:border-border-dark rounded-xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow min-w-[140px] sm:min-w-[180px] max-w-[220px] text-center cursor-pointer org-node relative select-none" data-id="${m.id}" role="treeitem" aria-expanded="${hasKids ? !isCollapsed : undefined}" tabindex="${hasKids ? '0' : '-1'}">
-          ${hasKids ? `<svg class="chevron-icon absolute top-1.5 right-1.5 w-3.5 h-3.5 text-muted-light dark:text-muted-dark ${isCollapsed ? '' : 'rotated'}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>` : ''}
-          <span class="text-2xl mb-1">${m.emoji}</span>
-          <span class="font-semibold text-sm truncate w-full">${m.name}</span>
-          <span class="text-xs text-muted-light dark:text-muted-dark truncate w-full">${m.role}</span>
-          <div class="mt-1.5 flex items-center gap-1">
-            ${levelBadgeHTML(m.level)}
-            <span class="text-[10px] px-2 py-0.5 rounded-full ${badgeCls}">${m.department}</span>
-          </div>
-        </div>
-        ${hasKids ? `
-          <div class="org-line h-5 sm:h-6 children-wrapper" data-parent="${m.id}" ${isCollapsed ? 'style="display:none"' : ''}></div>
-          <div class="flex flex-wrap justify-center gap-3 sm:gap-4 relative children-wrapper" data-parent="${m.id}" ${isCollapsed ? 'style="display:none"' : ''}>
-            ${kids.length > 1 ? `<div class="absolute top-0 left-[calc(50%/2+1px)] right-[calc(50%/2+1px)] h-[2px] bg-current opacity-15 dark:opacity-25"></div>` : ''}
-            ${kids.map(k => `
-              <div class="flex flex-col items-center">
-                <div class="org-line h-3 sm:h-4 w-[2px]"></div>
-                ${nodeHTML(k, depth + 1)}
-              </div>
-            `).join('')}
-          </div>
-        ` : ''}
-      </div>
-    `;
+    const badgeCls = deptAccent[m.department] || 'bg-gray-100 text-gray-600';
+
+    let html = `<div class="org-branch flex flex-col items-center">`;
+    // 节点卡片
+    html += `<div class="org-node flex flex-col items-center bg-white dark:bg-darkbg-surface border border-border dark:border-border-dark rounded-xl p-4 sm:p-5 shadow-sm min-w-[140px] sm:min-w-[180px] max-w-[220px] text-center cursor-pointer select-none relative" data-id="${m.id}" role="treeitem" ${hasKids ? `aria-expanded="${isCollapsed ? 'false' : 'true'}"` : ''} tabindex="0">`;
+    // 折叠指示器
+    if (hasKids) {
+      html += `<svg class="chevron-indicator absolute top-1.5 right-1.5 w-3.5 h-3.5 text-muted-light dark:text-muted-dark ${isCollapsed ? '' : 'rotated'}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>`;
+    }
+    html += `<span class="text-2xl mb-1">${m.emoji}</span>`;
+    html += `<span class="font-semibold text-sm truncate w-full">${m.name}</span>`;
+    html += `<span class="text-xs text-muted-light dark:text-muted-dark truncate w-full">${m.role}</span>`;
+    html += `<div class="mt-1.5 flex items-center gap-1">`;
+    html += levelBadgeHTML(m.level);
+    html += `<span class="text-[10px] px-2 py-0.5 rounded-full ${badgeCls}">${m.department}</span>`;
+    html += `</div></div>`;
+
+    // 子节点容器
+    if (hasKids) {
+      html += `<div class="org-children flex flex-row items-start justify-center gap-3 sm:gap-4 pt-4 ${isCollapsed ? 'hidden' : ''}">`;
+      kids.forEach(k => { html += branchHTML(k); });
+      html += `</div>`;
+    }
+
+    html += `</div>`;
+    return html;
   }
 
   const container = document.getElementById('orgChart');
-  container.innerHTML = `<div class="flex justify-center">${nodeHTML(root, 0)}</div>`;
+  container.innerHTML = `<div class="flex justify-center min-w-max p-4">${branchHTML(root)}</div>`;
 
+  // ── 绘制 SVG 连线 ──
+  drawOrgConnectors(container);
+
+  // ── 事件绑定: 折叠/展开 + 打开弹窗 ──
   container.querySelectorAll('.org-node').forEach(node => {
-    if (!node.getAttribute('aria-expanded')) return;
-    const toggle = () => {
-      const id = node.dataset.id;
-      const isExpanded = node.getAttribute('aria-expanded') === 'true';
-      if (isExpanded) {
-        collapsed.add(id);
-        node.setAttribute('aria-expanded', 'false');
-        node.querySelector('.chevron-icon')?.classList.remove('rotated');
-      } else {
-        collapsed.delete(id);
-        node.setAttribute('aria-expanded', 'true');
-        node.querySelector('.chevron-icon')?.classList.add('rotated');
+    const id = node.dataset.id;
+    const hasKids = node.getAttribute('aria-expanded') !== null;
+
+    node.addEventListener('click', (e) => {
+      // 点击折叠箭头区域 → 切换折叠
+      if (hasKids && e.target.closest('.chevron-indicator')) {
+        toggleCollapse(id, container);
+        return;
       }
-      container.querySelectorAll(`.children-wrapper[data-parent="${id}"]`).forEach(w => {
-        w.style.display = isExpanded ? 'none' : '';
-      });
-    };
-    node.addEventListener('click', toggle);
-    node.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+      // 点击节点其他区域 → 打开详情弹窗
+      showMemberModal(id);
+    });
+
+    // 键盘: Enter/空格折叠, D 键打开详情
+    node.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (hasKids) toggleCollapse(id, container);
+      }
+      if (e.key === 'd' || e.key === 'D') {
+        showMemberModal(id);
+      }
+    });
   });
+}
+
+function toggleCollapse(id, container) {
+  const node = container.querySelector(`.org-node[data-id="${id}"]`);
+  if (!node) return;
+  const isExpanded = node.getAttribute('aria-expanded') === 'true';
+  const chevron = node.querySelector('.chevron-indicator');
+
+  if (isExpanded) {
+    collapsed.add(id);
+    node.setAttribute('aria-expanded', 'false');
+    chevron?.classList.remove('rotated');
+  } else {
+    collapsed.delete(id);
+    node.setAttribute('aria-expanded', 'true');
+    chevron?.classList.add('rotated');
+  }
+
+  // 查找该节点所属 org-branch 下的 org-children
+  const branch = node.closest('.org-branch');
+  const childrenEl = branch?.querySelector(':scope > .org-children');
+  if (childrenEl) {
+    childrenEl.classList.toggle('hidden', isExpanded);
+  }
+
+  // 重绘连线
+  setTimeout(() => drawOrgConnectors(container), 50);
+}
+
+/**
+ * 使用 SVG 覆盖层绘制组织图连线
+ * - 从父节点底部中心 → 子节点容器顶部
+ * - 多子节点时加横线连接
+ * - 从横线 → 每个子节点顶部中心
+ */
+function drawOrgConnectors(container) {
+  // 移除旧 SVG
+  container.querySelectorAll('.org-svg-layer').forEach(el => el.remove());
+
+  const chartEl = container.querySelector('.flex.justify-center');
+  if (!chartEl) return;
+
+  const chartRect = chartEl.getBoundingClientRect();
+  const branches = Array.from(chartEl.querySelectorAll('.org-branch'));
+  let paths = '';
+  const lineColor = document.documentElement.classList.contains('dark')
+    ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)';
+
+  // 遍历每个 branch: 节点 → 子容器 连线
+  for (const branch of branches) {
+    const childContainer = branch.querySelector(':scope > .org-children');
+    if (!childContainer || childContainer.classList.contains('hidden')) continue;
+
+    const childBranches = Array.from(childContainer.querySelectorAll(':scope > .org-branch'));
+    if (childBranches.length === 0) continue;
+
+    const nodeEl = branch.querySelector(':scope > .org-node');
+    if (!nodeEl) continue;
+
+    const nodeRect = nodeEl.getBoundingClientRect();
+    const parentX = nodeRect.left + nodeRect.width / 2 - chartRect.left;
+    const parentY = nodeRect.bottom - chartRect.top;
+
+    const containerRect = childContainer.getBoundingClientRect();
+    const containerTop = containerRect.top - chartRect.top;
+
+    // 收集子节点顶部中心坐标
+    const childPoints = childBranches.map(cb => {
+      const cn = cb.querySelector(':scope > .org-node');
+      if (!cn) return null;
+      const cr = cn.getBoundingClientRect();
+      return {
+        x: cr.left + cr.width / 2 - chartRect.left,
+        y: cr.top - chartRect.top
+      };
+    }).filter(Boolean);
+
+    if (childPoints.length === 0) continue;
+
+    const midY = parentY + (containerTop - parentY) / 2;
+
+    // 父节点 → 中线
+    paths += `<line x1="${parentX}" y1="${parentY}" x2="${parentX}" y2="${midY}" stroke="currentColor" stroke-width="1.5" opacity="0.15"/>`;
+
+    if (childPoints.length === 1) {
+      // 单子节点: 中线 → 子节点
+      paths += `<line x1="${parentX}" y1="${midY}" x2="${childPoints[0].x}" y2="${childPoints[0].y}" stroke="currentColor" stroke-width="1.5" opacity="0.15"/>`;
+    } else {
+      // 多子节点: 横线 + 各竖线
+      const minX = Math.min(...childPoints.map(p => p.x));
+      const maxX = Math.max(...childPoints.map(p => p.x));
+      paths += `<line x1="${minX}" y1="${midY}" x2="${maxX}" y2="${midY}" stroke="currentColor" stroke-width="1.5" opacity="0.15"/>`;
+      for (const cp of childPoints) {
+        paths += `<line x1="${cp.x}" y1="${midY}" x2="${cp.x}" y2="${cp.y}" stroke="currentColor" stroke-width="1.5" opacity="0.15"/>`;
+      }
+    }
+  }
+
+  if (!paths) return;
+
+  const w = chartEl.scrollWidth;
+  const h = chartEl.scrollHeight;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'org-svg-layer');
+  svg.setAttribute('width', w);
+  svg.setAttribute('height', h);
+  svg.style.cssText = `position:absolute;top:0;left:0;pointer-events:none;overflow:visible;`;
+  svg.innerHTML = paths;
+  container.style.position = 'relative';
+  container.appendChild(svg);
 }
 
 /* ═══════════════════════════════════════
@@ -387,7 +566,6 @@ function buildOrgChart() {
 function populateDeptFilter() {
   const depts = [...new Set(members.map(m => m.department))].sort();
   const sel = document.getElementById('deptFilter');
-  // Clear existing options except the first "全部部门"
   while (sel.options.length > 1) sel.remove(1);
   depts.forEach(d => {
     const opt = document.createElement('option');
@@ -399,8 +577,8 @@ function populateDeptFilter() {
 
 function highlightText(text, query) {
   if (!query) return text;
-  const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\$&')})`, 'gi');
-  return text.replace(re, '<mark>$1</mark>');
+  const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi');
+  return text.replace(re, '<mark class="bg-accent/20 text-accent rounded px-0.5">$1</mark>');
 }
 
 function renderCards(query = '', dept = '') {
@@ -421,10 +599,17 @@ function renderCards(query = '', dept = '') {
   });
 
   resultCount.textContent = `共 ${filtered.length} / ${members.length}`;
-  noResult.classList.toggle('hidden', filtered.length > 0);
+
+  if (filtered.length === 0) {
+    grid.innerHTML = '';
+    noResult.classList.remove('hidden');
+    return;
+  }
+
+  noResult.classList.add('hidden');
 
   grid.innerHTML = filtered.map((m, i) => `
-    <div class="member-card bg-white dark:bg-darkbg-surface border border-border dark:border-border-dark rounded-xl p-6 flex flex-col items-center text-center opacity-0 cursor-pointer hover:border-accent/50 dark:hover:border-accent-light/50 hover:shadow-md transition-all" style="animation: fadeUp .5s ${i * .06}s cubic-bezier(.4,0,.2,1) both" data-id="${m.id}">
+    <div class="member-card bg-white dark:bg-darkbg-surface border border-border dark:border-border-dark rounded-xl p-6 flex flex-col items-center text-center cursor-pointer hover:border-accent/50 dark:hover:border-accent-light/50 hover:shadow-md transition-all opacity-0" style="animation: fadeUp .5s ${i * .06}s cubic-bezier(.4,0,.2,1) both" data-id="${m.id}">
       <div class="w-20 h-20 rounded-full bg-bgalt dark:bg-darkbg flex items-center justify-center text-3xl mb-4 ring-2 ring-accent/30">${m.emoji}</div>
       <h3 class="text-lg font-bold">${highlightText(m.name, query)}</h3>
       <p class="text-sm text-muted-light dark:text-muted-dark mt-0.5">${highlightText(m.role, query)}</p>
@@ -432,7 +617,7 @@ function renderCards(query = '', dept = '') {
         ${levelBadgeHTML(m.level)}
         <span class="text-xs px-2.5 py-0.5 rounded-full bg-accent/8 text-accent dark:bg-accent-light/10 dark:text-accent-light">${m.department}</span>
       </div>
-      <p class="mt-3 text-sm text-muted-light dark:text-muted-dark italic leading-relaxed">"${m.bio}"</p>
+      <p class="mt-3 text-sm text-muted-light dark:text-muted-dark italic leading-relaxed line-clamp-2">"${m.bio}"</p>
       <div class="mt-4 flex flex-wrap gap-1.5 justify-center">
         ${m.skills.map(s => `<span class="text-[11px] px-2 py-0.5 rounded bg-bgalt dark:bg-darkbg text-muted-light dark:text-muted-dark">${highlightText(s, query)}</span>`).join('')}
       </div>
@@ -444,22 +629,52 @@ function renderCards(query = '', dept = '') {
     </div>
   `).join('');
 
-  // Attach click handlers for modal
+  // 点击卡片打开弹窗
   grid.querySelectorAll('.member-card').forEach(card => {
     card.addEventListener('click', () => showMemberModal(card.dataset.id));
   });
 }
 
 /* ═══════════════════════════════════════
-   MEMBER DETAIL MODAL
+   MEMBER DETAIL MODAL — 修复: 完整详情
+   头像/姓名/角色/职级/部门/简介/上级/下属/项目/技能/汇报路径
    ═══════════════════════════════════════ */
+
+/**
+ * 计算汇报路径: 从根节点(老板)到目标成员的完整链条
+ */
+function getReportingPath(memberId) {
+  const path = [];
+  let current = members.find(m => m.id === memberId);
+  while (current) {
+    path.unshift(current);
+    if (!current.reportsTo) break;
+    current = members.find(m => m.id === current.reportsTo);
+    if (!current) break; // 防御: 上级不存在时停止
+  }
+  return path;
+}
+
 function showMemberModal(memberId) {
   const m = members.find(x => x.id === memberId);
   if (!m) return;
 
   const superior = m.reportsTo ? members.find(x => x.id === m.reportsTo) : null;
+  const subordinates = members.filter(x => x.reportsTo === m.id);
+  const reportPath = getReportingPath(m.id);
+
+  // 生成可点击的汇报路径 HTML
+  const pathHTML = reportPath.map((p, idx) => {
+    const isLast = idx === reportPath.length - 1;
+    const arrow = isLast ? '' : `<span class="text-accent mx-1 shrink-0">→</span>`;
+    if (isLast) {
+      return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent/10 text-accent font-semibold text-xs">${p.emoji} ${p.name}</span>${arrow}`;
+    }
+    return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-bgalt dark:bg-darkbg text-muted-light dark:text-muted-dark text-xs cursor-pointer hover:text-accent transition" onclick="event.stopPropagation(); showMemberModal('${p.id}')">${p.emoji} ${p.name}</span>${arrow}`;
+  }).join('');
 
   const content = `
+    <!-- 头部: 头像 + 姓名 + 角色 + 职级 + 部门 -->
     <div class="text-center mb-6">
       <div class="w-24 h-24 rounded-full bg-bgalt dark:bg-darkbg flex items-center justify-center text-4xl mx-auto mb-4 ring-4 ring-accent/30">${m.emoji}</div>
       <h2 class="text-2xl font-bold">${m.name}</h2>
@@ -470,11 +685,18 @@ function showMemberModal(memberId) {
       </div>
     </div>
 
+    <!-- 个人简介 -->
     <p class="text-center text-sm text-muted-light dark:text-muted-dark italic mb-6">"${m.bio}"</p>
 
-    <!-- Superior -->
+    <!-- 汇报路径 -->
     <div class="mb-6 p-4 bg-bgalt dark:bg-darkbg rounded-xl">
-      <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-light dark:text-muted-dark mb-2">直属上级</h4>
+      <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-light dark:text-muted-dark mb-3">📋 汇报路径</h4>
+      <div class="flex flex-wrap items-center gap-y-2">${pathHTML}</div>
+    </div>
+
+    <!-- 直属上级 -->
+    <div class="mb-6 p-4 bg-bgalt dark:bg-darkbg rounded-xl">
+      <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-light dark:text-muted-dark mb-2">👤 直属上级</h4>
       ${superior ? `
         <div class="flex items-center gap-3 cursor-pointer hover:bg-white dark:hover:bg-darkbg-surface p-2 rounded-lg transition group" onclick="showMemberModal('${superior.id}')">
           <span class="text-2xl">${superior.emoji}</span>
@@ -489,51 +711,51 @@ function showMemberModal(memberId) {
       `}
     </div>
 
-    <!-- Projects -->
+    <!-- 直接下属 -->
+    ${subordinates.length > 0 ? `
+      <div class="mb-6 p-4 bg-bgalt dark:bg-darkbg rounded-xl">
+        <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-light dark:text-muted-dark mb-3">👥 直接下属 (${subordinates.length})</h4>
+        <div class="flex flex-wrap gap-2">
+          ${subordinates.map(s => `
+            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-white dark:bg-darkbg-surface border border-border dark:border-border-dark cursor-pointer hover:border-accent hover:text-accent transition" onclick="showMemberModal('${s.id}')">
+              ${s.emoji} ${s.name}
+            </span>
+          `).join('')}
+        </div>
+      </div>
+    ` : ''}
+
+    <!-- 负责项目 -->
     <div class="mb-6 p-4 bg-bgalt dark:bg-darkbg rounded-xl">
-      <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-light dark:text-muted-dark mb-3">负责项目</h4>
+      <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-light dark:text-muted-dark mb-3">📂 负责项目</h4>
       <div class="flex flex-wrap gap-2">
         ${m.projects.map(p => `<span class="px-3 py-1.5 rounded-lg text-sm bg-white dark:bg-darkbg-surface border border-border dark:border-border-dark">${p}</span>`).join('')}
       </div>
     </div>
 
-    <!-- Skills -->
-    <div class="mb-6 p-4 bg-bgalt dark:bg-darkbg rounded-xl">
-      <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-light dark:text-muted-dark mb-3">技能标签</h4>
+    <!-- 技能标签 -->
+    <div class="mb-2 p-4 bg-bgalt dark:bg-darkbg rounded-xl">
+      <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-light dark:text-muted-dark mb-3">🛠 技能标签</h4>
       <div class="flex flex-wrap gap-2">
         ${m.skills.map(s => `<span class="px-3 py-1.5 rounded-lg text-sm bg-white dark:bg-darkbg-surface border border-border dark:border-border-dark">${s}</span>`).join('')}
       </div>
     </div>
-
-    <!-- Subordinates -->
-    ${(() => {
-      const subs = members.filter(x => x.reportsTo === m.id);
-      if (subs.length === 0) return '';
-      return `
-        <div class="p-4 bg-bgalt dark:bg-darkbg rounded-xl">
-          <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-light dark:text-muted-dark mb-3">下属 (${subs.length})</h4>
-          <div class="flex flex-wrap gap-2">
-            ${subs.map(s => `
-              <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-white dark:bg-darkbg-surface border border-border dark:border-border-dark cursor-pointer hover:border-accent transition" onclick="showMemberModal('${s.id}')">
-                ${s.emoji} ${s.name}
-              </span>
-            `).join('')}
-          </div>
-        </div>
-      `;
-    })()}
   `;
 
   document.getElementById('modalContent').innerHTML = content;
-  document.getElementById('memberModal').classList.remove('hidden');
+  // 触发淡入动画
+  const modal = document.getElementById('memberModal');
+  modal.classList.remove('hidden');
   document.body.style.overflow = 'hidden';
 }
 
 function closeModal() {
-  document.getElementById('memberModal').classList.add('hidden');
+  const modal = document.getElementById('memberModal');
+  modal.classList.add('hidden');
   document.body.style.overflow = '';
 }
 
+// 关闭事件: X按钮 / 背景点击 / ESC
 document.getElementById('modalClose').addEventListener('click', closeModal);
 document.getElementById('memberModal').addEventListener('click', (e) => {
   if (e.target === document.getElementById('memberModal')) closeModal();
