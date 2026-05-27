@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- QA Fixes 2026-05-26: #1 Org-chart collapse/expand #2 fetch error handling + loading state #3 Search a11y labels -->
+<!-- v2026-05-26: Added level badges, fixed dept filter, added member detail modal -->
 <html lang="zh-CN" class="scroll-smooth">
 <head>
   <meta charset="UTF-8" />
@@ -18,105 +18,71 @@
             bgalt:      { DEFAULT:'#F5F3F0', dark:'#121222' },
             darkbg:     { DEFAULT:'#0F0F1A', surface:'#16213E' },
             muted:      { light:'#6B6B80', dark:'#9A9AB0' },
-            border:     { DEFAULT:'#D4D0CA', hover:'#B8B3AB', dark:'#2A2A40' }
+            border:     { DEFAULT:'#E0DCD7', dark:'#2A2A3E' },
           },
-          fontFamily: {
-            heading: ['Inter','Noto Sans SC','sans-serif'],
-            body:    ['Inter','Noto Sans SC','system-ui','sans-serif'],
-          },
+          animation: { 'fadeUp': 'fadeUp .5s cubic-bezier(.4,0,.2,1) both' },
           keyframes: {
-            fadeUp:   { '0%':  { opacity:0, transform:'translateY(16px)' }, '100%': { opacity:1, transform:'translateY(0)' } },
-            pulse:    { '0%,100%':{ opacity:1, transform:'translateY(0)' }, '50%':{ opacity:.5, transform:'translateY(8px)' } },
-          },
-          animation: {
-            fadeUp: 'fadeUp .6s cubic-bezier(.4,0,.2,1) both',
-            pulse:  'pulse 2s infinite',
+            fadeUp: { '0%': { opacity:0, transform:'translateY(12px)' }, '100%': { opacity:1, transform:'translateY(0)' } }
           }
         }
       }
     }
   </script>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Inter','Noto Sans SC',system-ui,sans-serif; }
-    .section-enter { animation: fadeUp .6s cubic-bezier(.4,0,.2,1) both; }
-    .section-enter:nth-child(2){ animation-delay:.1s }
-    .section-enter:nth-child(3){ animation-delay:.2s }
-    .section-enter:nth-child(4){ animation-delay:.3s }
-    /* org-chart connector */
+    .section-enter { opacity:0; transform:translateY(20px); transition: all .6s cubic-bezier(.4,0,.2,1); }
+    .section-enter.visible { opacity:1; transform:translateY(0); }
+    .org-scroll { overflow-x:auto; scroll-behavior:smooth; -webkit-overflow-scrolling:touch; }
     .org-line { width:2px; background:currentColor; opacity:.15; }
-    .dark .org-line { opacity:.25; }
-    /* accordion */
-    .accordion-body { max-height:0; overflow:hidden; transition:max-height .4s cubic-bezier(.4,0,.2,1),padding .3s ease; }
-    .accordion-body.open { max-height:800px; padding-top:1rem; padding-bottom:1rem; }
-    .chevron-icon { transition: transform .3s ease; }
-    .chevron-icon.rotated { transform: rotate(180deg); }
-    /* card hover */
-    .member-card { transition: box-shadow .3s ease, transform .3s ease, border-color .3s ease; }
-    .member-card:hover { transform: translateY(-4px); box-shadow: 0 8px 30px rgba(26,26,46,.16); }
-    .dark .member-card:hover { box-shadow: 0 8px 30px rgba(0,0,0,.5); }
-    /* hamburger */
-    .bar { display:block; width:22px; height:2px; border-radius:2px; transition: all .3s ease; }
-    .nav-open .bar:nth-child(1){ transform: translateY(8px) rotate(45deg); }
-    .nav-open .bar:nth-child(2){ opacity:0; }
-    .nav-open .bar:nth-child(3){ transform: translateY(-8px) rotate(-45deg); }
-    .mobile-menu { transform: translateX(100%); transition: transform .35s cubic-bezier(.4,0,.2,1); }
-    .mobile-menu.open { transform: translateX(0); }
-    /* scrollbar */
-    ::-webkit-scrollbar { width:6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #D4D0CA; border-radius:3px; }
-    .dark ::-webkit-scrollbar-thumb { background: #2A2A40; }
-    /* org tree horizontal scroll on mobile */
-    .org-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
-    /* highlight match */
-    mark { background: rgba(233,69,96,.18); color: inherit; border-radius:2px; padding:0 2px; }
-    .dark mark { background: rgba(255,107,129,.2); }
+    .chevron-icon { transition: transform .2s ease; }
+    .chevron-icon.rotated { transform: rotate(-90deg); }
+    .level-badge { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; }
+    .level-T10 { background: #FFD700; color: #000; }
+    .level-T9  { background: #C0C0C0; color: #000; }
+    .level-T6  { background: #1A73E8; color: #fff; }
+    .level-T5  { background: #7C3AED; color: #fff; }
+    .level-T4  { background: #E0DCD7; color: #333; }
+    .dark .level-T4 { background: #3A3A4E; color: #ccc; }
+    /* Modal */
+    #memberModal { transition: opacity .2s ease; }
+    #memberModal.hidden { opacity: 0; pointer-events: none; }
+    #memberModal:not(.hidden) { opacity: 1; pointer-events: auto; }
+    .modal-backdrop { backdrop-filter: blur(4px); }
   </style>
 </head>
-<body class="bg-white text-primary dark:bg-darkbg dark:text-gray-100 transition-colors duration-300">
+<body class="bg-white dark:bg-darkbg text-primary dark:text-gray-100 transition-colors duration-300">
 
-<!-- ═══ Navigation ═══ -->
-<nav class="fixed top-0 inset-x-0 z-50 bg-white/80 dark:bg-darkbg/80 backdrop-blur-md border-b border-border dark:border-border-dark">
-  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-    <!-- Logo -->
-    <a href="#hero" class="flex items-center gap-2 text-lg font-bold tracking-tight">
-      <span class="text-2xl">🏢</span>
-      <span class="hidden sm:inline">一人公司</span>
+<!-- ═══ Navbar ═══ -->
+<nav class="sticky top-0 z-40 bg-white/80 dark:bg-darkbg/80 backdrop-blur-md border-b border-border dark:border-border-dark">
+  <div class="max-w-6xl mx-auto flex items-center justify-between px-4 py-3">
+    <a href="#hero" class="text-lg font-bold flex items-center gap-2">
+      <span class="text-2xl">🏢</span> 一人公司
     </a>
-    <!-- Desktop links -->
-    <div class="hidden md:flex items-center gap-6 text-sm font-medium text-muted-light dark:text-muted-dark">
-      <a href="#hero" class="hover:text-accent transition-colors">首页</a>
+    <div class="hidden md:flex items-center gap-6 text-sm font-medium">
       <a href="#org" class="hover:text-accent transition-colors">组织架构</a>
       <a href="#members" class="hover:text-accent transition-colors">团队</a>
       <a href="#tech" class="hover:text-accent transition-colors">技术栈</a>
-    </div>
-    <!-- Right: dark toggle + hamburger -->
-    <div class="flex items-center gap-3">
-      <button id="themeToggle" aria-label="切换深色模式" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-bgalt dark:hover:bg-darkbg-surface transition-colors">
+      <button id="themeToggle" class="p-1.5 rounded-lg hover:bg-bgalt dark:hover:bg-darkbg-surface transition" aria-label="切换深色模式">
         <span id="themeIcon">🌙</span>
       </button>
-      <button id="mobileToggle" class="md:hidden flex flex-col gap-1.5 p-1" aria-label="打开菜单">
-        <span class="bar bg-primary dark:bg-gray-100"></span>
-        <span class="bar bg-primary dark:bg-gray-100"></span>
-        <span class="bar bg-primary dark:bg-gray-100"></span>
-      </button>
     </div>
-  </div>
-  <!-- Mobile menu panel -->
-  <div id="mobileMenu" class="mobile-menu fixed inset-y-0 right-0 w-64 bg-white dark:bg-darkbg shadow-xl z-50 p-6 pt-20 md:hidden">
-    <div class="flex flex-col gap-4 text-base font-medium">
-      <a href="#hero" class="py-2 hover:text-accent transition-colors">首页</a>
-      <a href="#org" class="py-2 hover:text-accent transition-colors">组织架构</a>
-      <a href="#members" class="py-2 hover:text-accent transition-colors">团队</a>
-      <a href="#tech" class="py-2 hover:text-accent transition-colors">技术栈</a>
-    </div>
+    <button id="mobileToggle" class="md:hidden flex flex-col gap-1.5 p-1" aria-label="打开菜单">
+      <span class="bar bg-primary dark:bg-gray-100 w-5 h-0.5 rounded"></span>
+      <span class="bar bg-primary dark:bg-gray-100 w-5 h-0.5 rounded"></span>
+      <span class="bar bg-primary dark:bg-gray-100 w-5 h-0.5 rounded"></span>
+    </button>
   </div>
 </nav>
-<div id="mobileOverlay" class="fixed inset-0 bg-black/30 z-40 hidden md:hidden" aria-hidden="true"></div>
+
+<!-- Mobile menu -->
+<div id="mobileMenu" class="fixed inset-y-0 right-0 w-64 bg-white dark:bg-darkbg shadow-xl z-50 p-6 pt-20 translate-x-full transition-transform md:hidden">
+  <div class="flex flex-col gap-4 text-base font-medium">
+    <a href="#hero" class="py-2 hover:text-accent transition-colors">首页</a>
+    <a href="#org" class="py-2 hover:text-accent transition-colors">组织架构</a>
+    <a href="#members" class="py-2 hover:text-accent transition-colors">团队</a>
+    <a href="#tech" class="py-2 hover:text-accent transition-colors">技术栈</a>
+  </div>
+</div>
+<div id="mobileOverlay" class="fixed inset-0 bg-black/30 z-40 hidden md:hidden"></div>
 
 <!-- ═══ Loading / Error overlay ═══ -->
 <div id="appStatus" class="fixed inset-0 z-[60] flex items-center justify-center bg-white dark:bg-darkbg">
@@ -130,9 +96,8 @@
 
 <!-- ═══ Hero ═══ -->
 <section id="hero" class="relative min-h-[85vh] min-h-[520px] flex flex-col items-center justify-center text-center px-4 bg-gradient-to-br from-primary to-darkbg-surface text-white overflow-hidden">
-  <!-- Decorative dots -->
   <div class="absolute inset-0 opacity-[.04]" style="background-image:radial-gradient(circle,white 1px,transparent 1px);background-size:32px 32px"></div>
-  <div class="relative z-10 section-enter">
+  <div class="relative z-10">
     <p class="text-sm tracking-[.25em] uppercase text-accent-light mb-4">Est. 2026</p>
     <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-tight tracking-tight">一人公司</h1>
     <p class="mt-4 text-lg sm:text-xl lg:text-2xl font-light opacity-85 max-w-xl mx-auto">用设计改变世界，用代码构建未来</p>
@@ -141,14 +106,13 @@
       <a href="#tech" class="inline-flex items-center justify-center px-8 py-3 rounded-lg font-semibold border-2 border-white/40 hover:border-accent hover:text-accent-light transition-colors">技术栈</a>
     </div>
   </div>
-  <!-- Scroll indicator -->
-  <a href="#org" class="absolute bottom-8 animate-pulse text-white/60" aria-label="向下滚动">
+  <a href="#org" class="absolute bottom-8 animate-bounce text-white/60" aria-label="向下滚动">
     <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
   </a>
 </section>
 
 <!-- ═══ Organization Chart ═══ -->
-<section id="org" class="py-16 sm:py-20 px-4 bg-bgalt dark:bg-bgalt-dark section-enter">
+<section id="org" class="py-16 sm:py-20 px-4 bg-bgalt dark:bg-bgalt-dark">
   <div class="max-w-6xl mx-auto">
     <div class="flex items-center gap-3 mb-10">
       <div class="w-1 h-8 bg-accent rounded-full"></div>
@@ -160,13 +124,12 @@
 </section>
 
 <!-- ═══ Member Cards ═══ -->
-<section id="members" class="py-16 sm:py-20 px-4 section-enter">
+<section id="members" class="py-16 sm:py-20 px-4">
   <div class="max-w-6xl mx-auto">
     <div class="flex items-center gap-3 mb-6">
       <div class="w-1 h-8 bg-accent rounded-full"></div>
       <h2 class="text-2xl sm:text-3xl font-bold">团队成员</h2>
     </div>
-    <!-- Search & filter bar -->
     <div role="search" class="flex flex-col sm:flex-row gap-3 mb-8">
       <div class="relative flex-1">
         <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-light dark:text-muted-dark" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"/></svg>
@@ -177,14 +140,13 @@
       </select>
       <span id="resultCount" class="flex items-center text-sm text-muted-light dark:text-muted-dark whitespace-nowrap"></span>
     </div>
-    <!-- Grid -->
     <div id="memberGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
     <p id="noResult" class="hidden text-center py-12 text-muted-light dark:text-muted-dark">没有找到匹配的成员</p>
   </div>
 </section>
 
 <!-- ═══ Tech Stack ═══ -->
-<section id="tech" class="py-16 sm:py-20 px-4 bg-bgalt dark:bg-bgalt-dark section-enter">
+<section id="tech" class="py-16 sm:py-20 px-4 bg-bgalt dark:bg-bgalt-dark">
   <div class="max-w-6xl mx-auto">
     <div class="flex items-center gap-3 mb-10">
       <div class="w-1 h-8 bg-accent rounded-full"></div>
@@ -224,6 +186,18 @@
     © 2026 一人公司 · 隐私政策 · 使用条款
   </div>
 </footer>
+
+<!-- ═══ Member Detail Modal ═══ -->
+<div id="memberModal" class="hidden fixed inset-0 z-[70] flex items-center justify-center modal-backdrop bg-black/50">
+  <div class="relative bg-white dark:bg-darkbg-surface rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true">
+    <!-- Close button -->
+    <button id="modalClose" class="absolute top-3 right-3 p-2 rounded-full hover:bg-bgalt dark:hover:bg-darkbg transition" aria-label="关闭">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+    <!-- Content -->
+    <div id="modalContent" class="p-6 sm:p-8"></div>
+  </div>
+</div>
 
 <script>
 /* ═══════════════════════════════════════
@@ -265,14 +239,10 @@ function showError(msg, detail) {
 async function loadData() {
   try {
     const res = await fetch(DATA_URL);
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status_code} ${res.statusText}`);
     const text = await res.text();
     let json;
-    try {
-      json = JSON.parse(text);
-    } catch (e) {
-      throw new Error(`JSON 解析失败: ${e.message}\n前200字符: ${text.slice(0, 200)}`);
-    }
+    try { json = JSON.parse(text); } catch (e) { throw new Error(`JSON 解析失败: ${e.message}`); }
     if (!json.members || !Array.isArray(json.members)) throw new Error('数据格式错误: 缺少 members 数组');
     if (!json.company) throw new Error('数据格式错误: 缺少 company 字段');
     company = json.company;
@@ -289,7 +259,6 @@ retryBtn.addEventListener('click', () => { showLoading(); loadData().then(onRead
    ═══════════════════════════════════════ */
 const themeToggle = document.getElementById('themeToggle');
 const themeIcon   = document.getElementById('themeIcon');
-
 function applyTheme(dark) {
   document.documentElement.classList.toggle('dark', dark);
   themeIcon.textContent = dark ? '☀️' : '🌙';
@@ -310,17 +279,27 @@ const mobileToggle = document.getElementById('mobileToggle');
 const mobileMenu   = document.getElementById('mobileMenu');
 const mobileOverlay= document.getElementById('mobileOverlay');
 function closeMobile() {
-  mobileToggle.classList.remove('nav-open');
-  mobileMenu.classList.remove('open');
+  mobileMenu.classList.remove('translate-x-full');
   mobileOverlay.classList.add('hidden');
 }
 mobileToggle.addEventListener('click', () => {
-  const isOpen = mobileMenu.classList.toggle('open');
-  mobileToggle.classList.toggle('nav-open');
-  mobileOverlay.classList.toggle('hidden', !isOpen);
+  const isOpen = mobileMenu.classList.toggle('translate-x-full');
+  mobileOverlay.classList.toggle('hidden', isOpen);
 });
 mobileOverlay.addEventListener('click', closeMobile);
 mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMobile));
+
+/* ═══════════════════════════════════════
+   LEVEL HELPERS
+   ═══════════════════════════════════════ */
+function levelColor(level) {
+  const map = { 'T10': '#FFD700', 'T9': '#C0C0C0', 'T6': '#1A73E8', 'T5': '#7C3AED', 'T4': '#E0DCD7' };
+  return map[level] || '#888';
+}
+function levelBadgeHTML(level) {
+  if (!level) return '';
+  return `<span class="level-badge level-${level} px-1.5 py-0.5 rounded">${level}</span>`;
+}
 
 /* ═══════════════════════════════════════
    ORG CHART
@@ -335,7 +314,6 @@ function buildOrgChart() {
     }
   });
 
-  // Track collapsed state per node id (default: all expanded)
   const collapsed = new Set();
 
   function nodeHTML(m, depth) {
@@ -347,7 +325,7 @@ function buildOrgChart() {
       '产品与设计': 'bg-purple-500/10 text-purple-600 dark:bg-purple-400/10 dark:text-purple-300',
       '运营与市场': 'bg-green-500/10 text-green-600 dark:bg-green-400/10 dark:text-green-300',
     };
-    const badgeCls = accentColors[m.department] || 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+    const badgeCls = accentColors[m.department] || 'bg-gray-100 text-gray-600';
     const isCollapsed = collapsed.has(m.id);
     return `
       <div class="flex flex-col items-center">
@@ -356,11 +334,13 @@ function buildOrgChart() {
           <span class="text-2xl mb-1">${m.emoji}</span>
           <span class="font-semibold text-sm truncate w-full">${m.name}</span>
           <span class="text-xs text-muted-light dark:text-muted-dark truncate w-full">${m.role}</span>
-          <span class="mt-1.5 text-[10px] px-2 py-0.5 rounded-full ${badgeCls}">${m.department}</span>
+          <div class="mt-1.5 flex items-center gap-1">
+            ${levelBadgeHTML(m.level)}
+            <span class="text-[10px] px-2 py-0.5 rounded-full ${badgeCls}">${m.department}</span>
+          </div>
         </div>
         ${hasKids ? `
-          <div class="org-line h-5 sm:h-6 children-wrapper" data-parent="${m.id}" ${isCollapsed ? 'style="display:none"' : ''}>
-          </div>
+          <div class="org-line h-5 sm:h-6 children-wrapper" data-parent="${m.id}" ${isCollapsed ? 'style="display:none"' : ''}></div>
           <div class="flex flex-wrap justify-center gap-3 sm:gap-4 relative children-wrapper" data-parent="${m.id}" ${isCollapsed ? 'style="display:none"' : ''}>
             ${kids.length > 1 ? `<div class="absolute top-0 left-[calc(50%/2+1px)] right-[calc(50%/2+1px)] h-[2px] bg-current opacity-15 dark:opacity-25"></div>` : ''}
             ${kids.map(k => `
@@ -378,7 +358,6 @@ function buildOrgChart() {
   const container = document.getElementById('orgChart');
   container.innerHTML = `<div class="flex justify-center">${nodeHTML(root, 0)}</div>`;
 
-  // Attach click / keyboard handlers for collapse/expand
   container.querySelectorAll('.org-node').forEach(node => {
     if (!node.getAttribute('aria-expanded')) return;
     const toggle = () => {
@@ -398,12 +377,7 @@ function buildOrgChart() {
       });
     };
     node.addEventListener('click', toggle);
-    node.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        toggle();
-      }
-    });
+    node.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
   });
 }
 
@@ -413,16 +387,19 @@ function buildOrgChart() {
 function populateDeptFilter() {
   const depts = [...new Set(members.map(m => m.department))].sort();
   const sel = document.getElementById('deptFilter');
+  // Clear existing options except the first "全部部门"
+  while (sel.options.length > 1) sel.remove(1);
   depts.forEach(d => {
     const opt = document.createElement('option');
-    opt.value = d; opt.textContent = d;
+    opt.value = d;
+    opt.textContent = d;
     sel.appendChild(opt);
   });
 }
 
 function highlightText(text, query) {
   if (!query) return text;
-  const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi');
+  const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\$&')})`, 'gi');
   return text.replace(re, '<mark>$1</mark>');
 }
 
@@ -447,11 +424,14 @@ function renderCards(query = '', dept = '') {
   noResult.classList.toggle('hidden', filtered.length > 0);
 
   grid.innerHTML = filtered.map((m, i) => `
-    <div class="member-card bg-white dark:bg-darkbg-surface border border-border dark:border-border-dark rounded-xl p-6 flex flex-col items-center text-center opacity-0" style="animation: fadeUp .5s ${i * .06}s cubic-bezier(.4,0,.2,1) both">
+    <div class="member-card bg-white dark:bg-darkbg-surface border border-border dark:border-border-dark rounded-xl p-6 flex flex-col items-center text-center opacity-0 cursor-pointer hover:border-accent/50 dark:hover:border-accent-light/50 hover:shadow-md transition-all" style="animation: fadeUp .5s ${i * .06}s cubic-bezier(.4,0,.2,1) both" data-id="${m.id}">
       <div class="w-20 h-20 rounded-full bg-bgalt dark:bg-darkbg flex items-center justify-center text-3xl mb-4 ring-2 ring-accent/30">${m.emoji}</div>
       <h3 class="text-lg font-bold">${highlightText(m.name, query)}</h3>
       <p class="text-sm text-muted-light dark:text-muted-dark mt-0.5">${highlightText(m.role, query)}</p>
-      <span class="mt-1 text-xs px-2.5 py-0.5 rounded-full bg-accent/8 text-accent dark:bg-accent-light/10 dark:text-accent-light">${m.department}</span>
+      <div class="mt-1.5 flex items-center gap-1">
+        ${levelBadgeHTML(m.level)}
+        <span class="text-xs px-2.5 py-0.5 rounded-full bg-accent/8 text-accent dark:bg-accent-light/10 dark:text-accent-light">${m.department}</span>
+      </div>
       <p class="mt-3 text-sm text-muted-light dark:text-muted-dark italic leading-relaxed">"${m.bio}"</p>
       <div class="mt-4 flex flex-wrap gap-1.5 justify-center">
         ${m.skills.map(s => `<span class="text-[11px] px-2 py-0.5 rounded bg-bgalt dark:bg-darkbg text-muted-light dark:text-muted-dark">${highlightText(s, query)}</span>`).join('')}
@@ -459,10 +439,108 @@ function renderCards(query = '', dept = '') {
       <div class="mt-4 pt-4 border-t border-border dark:border-border-dark w-full flex items-center justify-center gap-4 text-sm">
         <span class="text-muted-light dark:text-muted-dark">📂 ${m.projects.length} 个项目</span>
         <span class="text-muted-light dark:text-muted-dark">🛠 ${m.skills.length} 项技能</span>
+        <span class="text-accent hover:underline text-xs ml-1">点击查看详情 →</span>
       </div>
     </div>
   `).join('');
+
+  // Attach click handlers for modal
+  grid.querySelectorAll('.member-card').forEach(card => {
+    card.addEventListener('click', () => showMemberModal(card.dataset.id));
+  });
 }
+
+/* ═══════════════════════════════════════
+   MEMBER DETAIL MODAL
+   ═══════════════════════════════════════ */
+function showMemberModal(memberId) {
+  const m = members.find(x => x.id === memberId);
+  if (!m) return;
+
+  const superior = m.reportsTo ? members.find(x => x.id === m.reportsTo) : null;
+
+  const content = `
+    <div class="text-center mb-6">
+      <div class="w-24 h-24 rounded-full bg-bgalt dark:bg-darkbg flex items-center justify-center text-4xl mx-auto mb-4 ring-4 ring-accent/30">${m.emoji}</div>
+      <h2 class="text-2xl font-bold">${m.name}</h2>
+      <p class="text-muted-light dark:text-muted-dark mt-1">${m.role}</p>
+      <div class="mt-2 flex items-center justify-center gap-2">
+        ${levelBadgeHTML(m.level)}
+        <span class="text-xs px-2.5 py-0.5 rounded-full bg-accent/8 text-accent dark:bg-accent-light/10 dark:text-accent-light">${m.department}</span>
+      </div>
+    </div>
+
+    <p class="text-center text-sm text-muted-light dark:text-muted-dark italic mb-6">"${m.bio}"</p>
+
+    <!-- Superior -->
+    <div class="mb-6 p-4 bg-bgalt dark:bg-darkbg rounded-xl">
+      <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-light dark:text-muted-dark mb-2">直属上级</h4>
+      ${superior ? `
+        <div class="flex items-center gap-3 cursor-pointer hover:bg-white dark:hover:bg-darkbg-surface p-2 rounded-lg transition group" onclick="showMemberModal('${superior.id}')">
+          <span class="text-2xl">${superior.emoji}</span>
+          <div class="text-left">
+            <p class="font-semibold text-sm group-hover:text-accent transition">${superior.name}</p>
+            <p class="text-xs text-muted-light dark:text-muted-dark">${superior.role}</p>
+          </div>
+          <span class="ml-auto text-muted-light dark:text-muted-dark group-hover:text-accent transition">→</span>
+        </div>
+      ` : `
+        <p class="text-sm text-muted-light dark:text-muted-dark">无（最高负责人）</p>
+      `}
+    </div>
+
+    <!-- Projects -->
+    <div class="mb-6 p-4 bg-bgalt dark:bg-darkbg rounded-xl">
+      <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-light dark:text-muted-dark mb-3">负责项目</h4>
+      <div class="flex flex-wrap gap-2">
+        ${m.projects.map(p => `<span class="px-3 py-1.5 rounded-lg text-sm bg-white dark:bg-darkbg-surface border border-border dark:border-border-dark">${p}</span>`).join('')}
+      </div>
+    </div>
+
+    <!-- Skills -->
+    <div class="mb-6 p-4 bg-bgalt dark:bg-darkbg rounded-xl">
+      <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-light dark:text-muted-dark mb-3">技能标签</h4>
+      <div class="flex flex-wrap gap-2">
+        ${m.skills.map(s => `<span class="px-3 py-1.5 rounded-lg text-sm bg-white dark:bg-darkbg-surface border border-border dark:border-border-dark">${s}</span>`).join('')}
+      </div>
+    </div>
+
+    <!-- Subordinates -->
+    ${(() => {
+      const subs = members.filter(x => x.reportsTo === m.id);
+      if (subs.length === 0) return '';
+      return `
+        <div class="p-4 bg-bgalt dark:bg-darkbg rounded-xl">
+          <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-light dark:text-muted-dark mb-3">下属 (${subs.length})</h4>
+          <div class="flex flex-wrap gap-2">
+            ${subs.map(s => `
+              <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-white dark:bg-darkbg-surface border border-border dark:border-border-dark cursor-pointer hover:border-accent transition" onclick="showMemberModal('${s.id}')">
+                ${s.emoji} ${s.name}
+              </span>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    })()}
+  `;
+
+  document.getElementById('modalContent').innerHTML = content;
+  document.getElementById('memberModal').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal() {
+  document.getElementById('memberModal').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+document.getElementById('modalClose').addEventListener('click', closeModal);
+document.getElementById('memberModal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('memberModal')) closeModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeModal();
+});
 
 /* ═══════════════════════════════════════
    TECH STACK
@@ -488,11 +566,27 @@ let debounce;
 function onSearch() {
   clearTimeout(debounce);
   debounce = setTimeout(() => {
-    renderCards(document.getElementById('searchInput').value.trim(), document.getElementById('deptFilter').value);
+    const query = document.getElementById('searchInput').value.trim();
+    const dept = document.getElementById('deptFilter').value;
+    renderCards(query, dept);
   }, 200);
 }
 document.getElementById('searchInput').addEventListener('input', onSearch);
-document.getElementById('deptFilter').addEventListener('change', () => renderCards(document.getElementById('searchInput').value.trim(), document.getElementById('deptFilter').value));
+document.getElementById('deptFilter').addEventListener('change', onSearch);
+
+/* ═══════════════════════════════════════
+   INTERSECTION OBSERVER
+   ═══════════════════════════════════════ */
+function initScrollAnimations() {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.section-enter').forEach(el => observer.observe(el));
+}
 
 /* ═══════════════════════════════════════
    INIT
@@ -502,6 +596,7 @@ function onReady() {
   populateDeptFilter();
   renderCards();
   renderTechStack();
+  initScrollAnimations();
   hideLoading();
 }
 
